@@ -13,7 +13,7 @@ health_check = "/"
 # additionally requires Matrix admin credentials for the target homeserver.
 
 [resources]
-memory_mb = 64
+memory_mb = 256
 cpu_cores = 0.1
 
 [data]
