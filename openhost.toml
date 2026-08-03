@@ -1,0 +1,21 @@
+[app]
+name = "synapse-admin"
+version = "0.11.4"
+description = "Admin UI for Matrix Synapse homeservers (Awesome-Technologies/synapse-admin)"
+
+[runtime.container]
+image = "Dockerfile"
+port = 8080
+
+[routing]
+health_check = "/"
+# No public_paths: the app is login-gated by the OpenHost router. Synapse-admin
+# additionally requires Matrix admin credentials for the target homeserver.
+
+[resources]
+memory_mb = 64
+cpu_cores = 0.1
+
+[data]
+# Purely static SPA; all state lives in the browser / on the homeserver.
+app_data = false

@@ -1,0 +1,58 @@
+[project]
+name = "openhost-synapse-admin"
+version = "0.11.4"
+description = "OpenHost packaging of synapse-admin (tests only; the app itself is a static SPA)"
+requires-python = "==3.12.*"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "pytest>=8.0",
+    "pytest-playwright",
+    "playwright",
+    "httpx>=0.27",
+    # Builds the app's Dockerfile, runs it under podman with the mounts/env its
+    # openhost.toml declares, and fronts it with the real OpenHost router (real
+    # subdomain routing and cookie auth). Tests hit a real, containerized app.
+    # Requires podman on the host.
+    "openhost[test-harness] @ git+https://github.com/imbue-openhost/openhost@main",
+]
+
+[tool.pytest.ini_options]
+# --browser-channel chromium: use full chromium (new headless mode); synapse-admin
+# doesn't render in playwright's default chromium-headless-shell.
+addopts = "-v --browser-channel chromium"
+
+[tool.ruff]
+line-length = 119
+exclude = [
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade (modern Python syntax)
+    "I",      # isort
+    "PLC0415", # import-outside-top-level
+]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+force-single-line = true
+case-sensitive = true
+
+[tool.mypy]
+python_version = "3.12"
+files = ["tests"]
+strict = true
+ignore_missing_imports = true
+exclude = []
