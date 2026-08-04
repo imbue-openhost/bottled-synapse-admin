@@ -1,0 +1,31 @@
+name: Build and Deploy Edge version to GH Pages
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+permissions:
+  contents: write
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 100
+          fetch-tags: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install and Build 🔧
+        run: |
+          yarn install --immutable
+          yarn build --base=/synapse-admin
+
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@v4.8.0
+        with:
+          branch: gh-pages
+          folder: dist
