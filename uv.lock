@@ -857,7 +857,12 @@ test-harness = [
 [[package]]
 name = "openhost-synapse-admin"
 version = "0.11.4"
-source = { virtual = "." }
+source = { editable = "." }
+dependencies = [
+    { name = "attrs" },
+    { name = "hypercorn" },
+    { name = "litestar" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -872,6 +877,11 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "attrs" },
+    { name = "hypercorn" },
+    { name = "litestar" },
+]
 
 [package.metadata.requires-dev]
 dev = [

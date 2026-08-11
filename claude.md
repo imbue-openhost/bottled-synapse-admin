@@ -2,7 +2,8 @@
 - on first init, run `just setup` — this installs dependencies, the pre-commit hooks, and the playwright chromium browser. pre-commit runs ruff and mypy on commit.
 - use uv for all python work (`uv run ...`, `uv add ...`, `uv sync`).
 - this is an OpenHost app. `openhost.toml` is the app manifest.
-- the app is upstream synapse-admin (a static SPA) served by nginx on port 8080; the Dockerfile downloads the pinned, sha256-verified upstream release tarball. python in this repo is test tooling only. see "deploying & debugging on openhost" below.
+- `synapse-admin/` is a git subtree of upstream at tag 0.11.4, lightly forked and built from source (yarn 4 + vite). keep fork changes minimal and marked with an "OpenHost fork:" comment, so subtree pulls stay easy — see the fork-changes table in README.md.
+- a Litestar server (`src/openhost_synapse_admin/`) serves the built SPA on port 8080 and owns `session.json` in the app data dir. the fork's `storage.ts` reads/writes the Matrix session there instead of localStorage, so the login is shared across browsers. see "deploying & debugging on openhost" below.
 - tests use the OpenHost test harness (the `openhost[test-harness]` package, imported as `openhost_test_harness`): each run builds the Dockerfile, runs the app under podman per `openhost.toml`, and fronts it with the real OpenHost router. so `just test` requires podman running on the host. `stack.url` goes through the router and requires owner auth (use `stack.owner_session` for requests, or `stack.playwright_login(page)` for browser tests); `stack.app_url` hits the container directly.
 
 ## deploying & debugging on openhost

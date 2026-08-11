@@ -21,6 +21,7 @@ playwright-report/
 
 # Local app data / sqlite
 *.db
+.local-data/
 
 # IDE
 .idea/

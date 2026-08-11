@@ -128,5 +128,6 @@
       </a>
     </footer>
   </body>
-  <script>document.getElementById("version").textContent = __SYNAPSE_ADMIN_VERSION__</script>
+  <!-- OpenHost fork: the footer version is set from index.tsx. It used to be a classic inline script
+       reading the build-time version constant, which vite's `define` does not substitute here, so it threw. -->
 </html>

@@ -8,7 +8,7 @@ image = "Dockerfile"
 port = 8080
 
 [routing]
-health_check = "/"
+health_check = "/healthz"
 # No public_paths: the app is login-gated by the OpenHost router. Synapse-admin
 # additionally requires Matrix admin credentials for the target homeserver.
 
@@ -17,5 +17,6 @@ memory_mb = 256
 cpu_cores = 0.1
 
 [data]
-# Purely static SPA; all state lives in the browser / on the homeserver.
-app_data = false
+# Holds session.json: the homeserver URL and the Matrix access token obtained at
+# login, so the session is shared across browsers instead of living in localStorage.
+app_data = true

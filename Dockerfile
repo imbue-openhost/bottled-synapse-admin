@@ -1,24 +1,33 @@
-# synapse-admin is a fully static SPA; upstream publishes a prebuilt dist
-# tarball (built with a relative base path) per release, so we serve that
-# directly instead of building from source.
-ARG SYNAPSE_ADMIN_VERSION=0.11.4
+# synapse-admin/ is a git subtree of upstream, forked so the session lives on the server rather than in
+# the browser (see synapse-admin/src/storage.ts). We build it from source; the Python layer serves the
+# build and owns the session file.
 
-FROM alpine:3.21 AS fetch
-ARG SYNAPSE_ADMIN_VERSION
-ARG SYNAPSE_ADMIN_SHA256=fe76fc198540b6ecd29cca0f689e61c6de1183f9d2a4b6662734c2e69cbcb2c9
+FROM node:22-alpine AS frontend
+WORKDIR /build
 
-RUN wget -q -O /tmp/synapse-admin.tar.gz \
-      "https://github.com/Awesome-Technologies/synapse-admin/releases/download/${SYNAPSE_ADMIN_VERSION}/synapse-admin-${SYNAPSE_ADMIN_VERSION}.tar.gz" \
- && echo "${SYNAPSE_ADMIN_SHA256}  /tmp/synapse-admin.tar.gz" | sha256sum -c - \
- && mkdir /app \
- && tar xzf /tmp/synapse-admin.tar.gz --strip-components=1 -C /app \
- # upstream releases ship index.html with this vite placeholder unsubstituted,
- # which throws in the browser and leaves the footer version blank
- && sed -i "s/__SYNAPSE_ADMIN_VERSION__/\"${SYNAPSE_ADMIN_VERSION}\"/" /app/index.html
+# .yarn holds the pinned yarn 4.4.1 release, so the toolchain itself needs no network fetch.
+COPY synapse-admin/.yarn .yarn
+COPY synapse-admin/package.json synapse-admin/.yarnrc.yml synapse-admin/yarn.lock ./
+RUN yarn config set enableTelemetry 0 \
+ && yarn install --immutable --network-timeout=300000
 
-FROM nginx:stable-alpine
+COPY synapse-admin/ ./
+RUN yarn build
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=fetch /app /usr/share/nginx/html
+FROM python:3.12-alpine
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+RUN uv sync --frozen --no-dev
+
+COPY --from=frontend /build/dist /app/static
+ENV SYNAPSE_ADMIN_STATIC_DIR=/app/static
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080
+CMD ["python", "-u", "-m", "openhost_synapse_admin.main"]

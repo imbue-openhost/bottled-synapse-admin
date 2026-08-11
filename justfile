@@ -7,8 +7,13 @@ setup:
     uv run playwright install chromium
 
 # Build the container image and serve it locally on http://localhost:8080.
+# Credentials persist in ./.local-data, standing in for the OpenHost app data mount.
 run: build
-    podman run --rm -p 8080:8080 synapse-admin
+    mkdir -p .local-data
+    podman run --rm -p 8080:8080 \
+        -v ./.local-data:/data/app_data/synapse-admin \
+        -e OPENHOST_APP_DATA_DIR=/data/app_data/synapse-admin \
+        synapse-admin
 
 # Run the test suite.
 test:

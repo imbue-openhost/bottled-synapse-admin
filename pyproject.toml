@@ -1,9 +1,20 @@
 [project]
 name = "openhost-synapse-admin"
 version = "0.11.4"
-description = "OpenHost packaging of synapse-admin (tests only; the app itself is a static SPA)"
+description = "OpenHost packaging of synapse-admin, with the Matrix session stored server-side"
 requires-python = "==3.12.*"
-dependencies = []
+dependencies = [
+    "litestar",
+    "hypercorn",
+    "attrs",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openhost_synapse_admin"]
 
 [dependency-groups]
 dev = [
@@ -29,6 +40,7 @@ addopts = "-v --browser-channel chromium"
 [tool.ruff]
 line-length = 119
 exclude = [
+    "synapse-admin",  # vendored upstream subtree
 ]
 
 [tool.ruff.lint]
@@ -52,7 +64,7 @@ case-sensitive = true
 
 [tool.mypy]
 python_version = "3.12"
-files = ["tests"]
+files = ["src", "tests"]
 strict = true
 ignore_missing_imports = true
 exclude = []

@@ -5,41 +5,64 @@ as an [OpenHost](https://github.com/imbue-openhost/openhost) app: an admin UI
 for [Matrix Synapse](https://github.com/element-hq/synapse) homeservers (manage
 users, rooms, media, reports, ...).
 
-The app is a fully static SPA. The Dockerfile downloads the pinned upstream
-release tarball (sha256-verified, prebuilt by upstream with a relative base
-path) and serves it with nginx on port 8080. There is no backend and no
-persistent data; everything runs client-side in the browser, talking directly
-to the Synapse homeserver's admin API.
+Upstream lives in `synapse-admin/` as a **git subtree**, lightly forked and built
+from source. A small Python (Litestar) server serves the build and owns the one
+piece of state that isn't upstream's: the Matrix session.
 
-Access is gated by the OpenHost router (no `public_paths`). Once logged in to
-OpenHost, sign in on the synapse-admin login page with an admin account on the
-target homeserver (or an access token). Note that the *browser* talks to the
-homeserver, so the homeserver must be reachable from wherever you're browsing,
-and its CORS settings must allow it (Synapse's defaults do).
+## the fork: the session lives on the server
+
+Stock synapse-admin keeps the session (homeserver URL, access token, user id,
+device id) in the browser's `localStorage`, so every browser needs its own login.
+Here it lives on the OpenHost instance instead, at
+`$OPENHOST_APP_DATA_DIR/session.json` (mode 0600) — log in once, and any browser
+that reaches the app is already logged in.
+
+Upstream funnels every session read and write through a one-line seam,
+`synapse-admin/src/storage.ts` (`const storage = localStorage`). The fork
+replaces that module with a server-backed store of the same shape, so no call
+site changes:
+
+- reads stay **synchronous** (they happen during render) by serving from an
+  in-memory cache;
+- `index.tsx` awaits `hydrateStorage()` before mounting, so the cache is filled
+  from `GET /_openhost/session` before anything reads it;
+- `setItem`/`removeItem` write through to `PUT /_openhost/session`, serialized so
+  a slow request can't land after a newer one.
+
+Logging in through the normal login page is therefore all it takes to persist the
+session; logging out clears it server-side. There is no separate settings UI.
+
+The stored access token is a Matrix bearer credential: it can do anything the
+admin account can via the admin API, though (unlike a password) it is
+individually revocable and can't be replayed against other services. The app is
+gated by the OpenHost router (no `public_paths`), so it is not internet-facing.
+
+### fork changes
+
+Everything else in `synapse-admin/` is upstream at tag `0.11.4`.
+
+| file | change |
+|---|---|
+| `src/storage.ts` | server-backed session store replacing `localStorage` |
+| `src/index.tsx` | `hydrateStorage()` before mount; sets the footer version |
+| `index.html` | dropped the inline version script (see below) |
+| `vite.config.ts` | `define`s `__SYNAPSE_ADMIN_VERSION__` from `package.json` |
+
+The version change fixes an upstream bug: `index.html` referenced
+`__SYNAPSE_ADMIN_VERSION__` from a *classic* inline script, which vite's `define`
+does not substitute, so it threw in the browser and left the footer blank. Worth
+reporting upstream.
 
 ## upgrading synapse-admin
 
-Bump `SYNAPSE_ADMIN_VERSION` and `SYNAPSE_ADMIN_SHA256` in the `Dockerfile`
-(sha256 of the new release tarball), and the versions in `openhost.toml` and
-`pyproject.toml`.
+```bash
+git subtree pull --prefix synapse-admin \
+  https://github.com/Awesome-Technologies/synapse-admin.git <tag> --squash
+```
 
-## remaining work
-
-- `test_login_page_renders` is marked `xfail(strict=False)`: react-admin
-  sometimes stalls after its initial checkAuth/logout and never mounts the
-  login form (all assets load with 200s, no JS errors, no failed requests; the
-  page stays on the static loader shell). Reproducible against upstream's own
-  docker image, and it never renders at all under playwright's default
-  chromium-headless-shell (hence `--browser-channel chromium` in pytest
-  addopts). Root cause not yet found — likely an upstream react-admin 5 /
-  react-router 7 race.
-- The test harness intermittently fails with "full app did not come up after
-  /setup" (a 60s poll of the router's own dashboard, before the app deploys);
-  rerunning passes. Needs investigation in the harness, not this repo.
-- Upstream release tarballs ship `index.html` with the `__SYNAPSE_ADMIN_VERSION__`
-  vite placeholder unsubstituted, which throws in the browser; the Dockerfile
-  patches it with sed. Worth reporting upstream.
-- Not yet deployed to a real OpenHost instance.
+Resolve conflicts in the four forked files above, then bump the versions in
+`openhost.toml` and `pyproject.toml`. If a release renames the session keys the
+authProvider uses, the fork keeps working — `storage.ts` is key-agnostic.
 
 ## development
 
@@ -50,7 +73,9 @@ just test    # run the test suite
 just check   # lint, format, typecheck
 ```
 
-Python here is test-only tooling, managed with [uv](https://docs.astral.sh/uv/).
+Python here is the app server plus test tooling, managed with
+[uv](https://docs.astral.sh/uv/). `just run` persists the session to
+`./.local-data`, standing in for the OpenHost app data mount.
 
 `just test` uses the OpenHost test harness (the `openhost[test-harness]` package),
 which builds the Dockerfile and runs the app under **podman** (so podman must be
@@ -58,3 +83,16 @@ running on the host) fronted by the real OpenHost router. `stack.url` requires
 owner auth (use `stack.owner_session` for requests, or `stack.playwright_login(page)`
 for browser tests); `stack.app_url` hits the container directly. See `tests/` for the
 `stack` fixture.
+
+## remaining work
+
+- The SPA can take ~40s to mount under headless chromium — react-admin stalls
+  after its initial checkAuth before mounting. Predates the fork (reproducible
+  against upstream's own docker image) and never renders at all under
+  playwright's default chromium-headless-shell, hence `--browser-channel
+  chromium` in pytest addopts. `test_login_page_renders` is `xfail(strict=False)`
+  for this. Root cause not yet found — likely an upstream react-admin 5 /
+  react-router 7 race.
+- The test harness intermittently fails with "full app did not come up after
+  /setup" (a 60s poll of the router's own dashboard, before the app deploys);
+  rerunning passes. Needs investigation in the harness, not this repo.
