@@ -45,6 +45,8 @@ import {
   RoomDirectoryPublishButton,
 } from "./room_directory";
 import { DATE_FORMAT } from "../components/date";
+import { UserIdField } from "../openhost/local_users";
+import { RoomMembers } from "../openhost/room_members";
 
 const RoomPagination = () => <Pagination rowsPerPageOptions={[10, 25, 50, 100, 500, 1000]} />;
 
@@ -89,9 +91,8 @@ export const RoomShow = (props: ShowProps) => {
           <TextField source="name" />
           <TextField source="topic" />
           <TextField source="canonical_alias" />
-          <ReferenceField source="creator" reference="users">
-            <TextField source="id" />
-          </ReferenceField>
+          {/* OpenHost fork: a room joined over federation can have a creator this homeserver cannot look up. */}
+          <UserIdField source="creator" label="resources.rooms.fields.creator" />
         </Tab>
 
         <Tab label="synapseadmin.rooms.tabs.detail" icon={<PageviewIcon />} path="detail">
@@ -104,20 +105,8 @@ export const RoomShow = (props: ShowProps) => {
         </Tab>
 
         <Tab label="synapseadmin.rooms.tabs.members" icon={<UserIcon />} path="members">
-          <ReferenceManyField reference="room_members" target="room_id" label={false}>
-            <Datagrid style={{ width: "100%" }} rowClick={id => "/users/" + id} bulkActionButtons={false}>
-              <TextField source="id" sortable={false} label="resources.users.fields.id" />
-              <ReferenceField
-                label="resources.users.fields.displayname"
-                source="id"
-                reference="users"
-                sortable={false}
-                link=""
-              >
-                <TextField source="displayname" sortable={false} />
-              </ReferenceField>
-            </Datagrid>
-          </ReferenceManyField>
+          {/* OpenHost fork: federated members have no /users page, so the list is built in openhost/. */}
+          <RoomMembers />
         </Tab>
 
         <Tab label="synapseadmin.rooms.tabs.permission" icon={<VisibilityIcon />} path="permission">
@@ -177,9 +166,8 @@ export const RoomShow = (props: ShowProps) => {
               <TextField source="type" sortable={false} />
               <DateField source="origin_server_ts" showTime options={DATE_FORMAT} sortable={false} />
               <TextField source="content" sortable={false} />
-              <ReferenceField source="sender" reference="users" sortable={false}>
-                <TextField source="id" />
-              </ReferenceField>
+              {/* OpenHost fork: most senders in a federated room are remote and have no user page. */}
+              <UserIdField source="sender" label="resources.room_state.fields.sender" sortable={false} />
             </Datagrid>
           </ReferenceManyField>
         </Tab>

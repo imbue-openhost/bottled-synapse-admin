@@ -11,7 +11,14 @@ COPY synapse-admin/package.json synapse-admin/.yarnrc.yml synapse-admin/yarn.loc
 RUN yarn config set enableTelemetry 0 \
  && yarn install --immutable --network-timeout=300000
 
-COPY synapse-admin/ ./
+# Copy only the build inputs, never `.yarn` again: that directory now holds the resolved PnP packages,
+# and overwriting it with the repo's (which has just the yarn release + sdks) breaks the build.
+COPY synapse-admin/src ./src
+COPY synapse-admin/public ./public
+COPY synapse-admin/index.html synapse-admin/vite.config.ts ./
+COPY synapse-admin/tsconfig.json synapse-admin/tsconfig.vite.json synapse-admin/tsconfig.eslint.json ./
+# `yarn lint` uses .gitignore as its ignore file and errors without it.
+COPY synapse-admin/.gitignore ./
 RUN yarn build
 
 FROM python:3.12-alpine

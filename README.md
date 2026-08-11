@@ -37,6 +37,23 @@ admin account can via the admin API, though (unlike a password) it is
 individually revocable and can't be replayed against other services. The app is
 gated by the OpenHost router (no `public_paths`), so it is not internet-facing.
 
+## the fork: federated users have no user page
+
+Synapse's admin API only knows users **local** to the homeserver you are logged
+into; asking it about anyone else gives `400 M_UNKNOWN "Can only look up local
+users"`. Upstream ignores this and renders every Matrix ID as a link to
+`/users/<id>`, so in a federated room most of those links open a page whose
+`getOne` fails, and react-admin bounces straight back to the user list.
+
+`src/openhost/` renders remote IDs as plain text tagged with their origin server
+instead, and drops the link. It also adds the one administrative action a
+homeserver *can* take on a user it doesn't own: kicking them out of a room, via
+`POST /_matrix/client/v3/rooms/{roomId}/kick`, per row or over a selection. This
+needs a power level of at least the room's `kick` level (50 by default).
+
+Note that a homeserver whose rooms are all federated legitimately shows a
+near-empty user list — that is the admin API working correctly, not a bug.
+
 ### fork changes
 
 Everything else in `synapse-admin/` is upstream at tag `0.11.4`.
@@ -47,11 +64,17 @@ Everything else in `synapse-admin/` is upstream at tag `0.11.4`.
 | `src/index.tsx` | `hydrateStorage()` before mount; sets the footer version |
 | `index.html` | dropped the inline version script (see below) |
 | `vite.config.ts` | `define`s `__SYNAPSE_ADMIN_VERSION__` from `package.json` |
+| `src/openhost/` | new; the federation-aware member list and user links |
+| `src/resources/rooms.tsx` | members tab, room `creator` and state-event `sender` come from `src/openhost/` |
+| `src/synapse/dataProvider.ts` | `jsonClient` exported so `src/openhost/` can reach non-resource endpoints |
+
+New behaviour lives in `src/openhost/` so the diff against upstream files stays
+to an import and a tag; conflicts on a subtree pull should be trivial.
 
 The version change fixes an upstream bug: `index.html` referenced
 `__SYNAPSE_ADMIN_VERSION__` from a *classic* inline script, which vite's `define`
 does not substitute, so it threw in the browser and left the footer blank. Worth
-reporting upstream.
+reporting upstream — as is the dead link, which is not OpenHost-specific.
 
 ## upgrading synapse-admin
 
@@ -60,7 +83,7 @@ git subtree pull --prefix synapse-admin \
   https://github.com/Awesome-Technologies/synapse-admin.git <tag> --squash
 ```
 
-Resolve conflicts in the four forked files above, then bump the versions in
+Resolve conflicts in the forked files above, then bump the versions in
 `openhost.toml` and `pyproject.toml`. If a release renames the session keys the
 authProvider uses, the fork keeps working — `storage.ts` is key-agnostic.
 
@@ -86,13 +109,21 @@ for browser tests); `stack.app_url` hits the container directly. See `tests/` fo
 
 ## remaining work
 
-- The SPA can take ~40s to mount under headless chromium — react-admin stalls
-  after its initial checkAuth before mounting. Predates the fork (reproducible
-  against upstream's own docker image) and never renders at all under
-  playwright's default chromium-headless-shell, hence `--browser-channel
-  chromium` in pytest addopts. `test_login_page_renders` is `xfail(strict=False)`
-  for this. Root cause not yet found — likely an upstream react-admin 5 /
-  react-router 7 race.
+- Playwright's locator waits (`expect(...).to_be_visible`) stall against this app,
+  so `test_login_page_renders` is `xfail(strict=False)` on a 30s budget. The app
+  itself renders in about a second — the container log shows the login page's
+  background `floating-cogs.svg` fetched right after the bundle. Chromium launches
+  in 0.3s, a CPU profile of the stall is ~100% idle, and upstream's own image
+  behaves the same, so this is a Playwright interaction rather than an app defect.
+  The non-browser tests cover the fork's wiring instead.
+
+  If you write probes for this, two traps: `wait_until="commit"` returns before an
+  execution context exists, so a following `page.evaluate` blocks forever; and
+  `time.sleep()` does not pump sync Playwright's event loop, so queued events never
+  dispatch and a healthy page looks dead. Use the default `wait_until` and
+  `page.wait_for_timeout()`.
+- The SPA does not render under playwright's default chromium-headless-shell,
+  hence `--browser-channel chromium` in pytest addopts.
 - The test harness intermittently fails with "full app did not come up after
   /setup" (a 60s poll of the router's own dashboard, before the app deploys);
   rerunning passes. Needs investigation in the harness, not this repo.

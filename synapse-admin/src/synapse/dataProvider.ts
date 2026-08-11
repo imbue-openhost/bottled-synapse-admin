@@ -12,7 +12,8 @@ import {
 import storage from "../storage";
 
 // Adds the access token to all requests
-const jsonClient = (url: string, options: Options = {}) => {
+// OpenHost fork: exported so src/openhost/ can call Matrix endpoints that have no resourceMap entry.
+export const jsonClient = (url: string, options: Options = {}) => {
   const token = storage.getItem("access_token");
   console.log("httpClient " + url);
   if (token != null) {
